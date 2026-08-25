@@ -64,6 +64,7 @@ async def serialize(session: AsyncSession, rows: list[ChatMessage]) -> list[dict
                 "author_name": m.author_name,
                 "kind": m.kind,
                 "body": m.body,
+                "emotion": m.emotion,
                 "reply_to": (
                     {"id": str(target.id), "author_name": target.author_name, "body": target.body[:140]}
                     if target is not None

@@ -262,6 +262,7 @@ class MessageOut(BaseModel):
     kind: str
     body: str
     reply_to: ReplyPreviewOut | None
+    emotion: str | None = None
 
 
 class MessagesPage(BaseModel):

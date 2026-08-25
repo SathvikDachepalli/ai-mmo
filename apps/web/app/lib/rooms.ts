@@ -116,6 +116,7 @@ export interface MessageOut {
   kind: string;
   body: string;
   reply_to: ReplyPreviewOut | null;
+  emotion?: string | null;
 }
 
 export interface MessagesPage {

@@ -320,7 +320,7 @@ async def _stream_with_emotion(chunk_iter, chunks: list[str], channel: str) -> s
 
 async def _save_and_broadcast(room_id, text: str, emotion: str = "neutral") -> None:
     async with session_factory() as session:
-        msg = ChatMessage(room_id=room_id, user_id=None, author_name="AI", kind="ai", body=text)
+        msg = ChatMessage(room_id=room_id, user_id=None, author_name="AI", kind="ai", body=text, emotion=emotion)
         session.add(msg)
         await session.commit()
         await session.refresh(msg)

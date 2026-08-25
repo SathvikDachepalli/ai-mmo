@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from fastapi_users_db_sqlalchemy import SQLAlchemyBaseUserTableUUID
 
-from app.db.session import Base
+from app.db.base import Base
 
 
 def _uuid() -> uuid.UUID:
@@ -221,6 +221,8 @@ class ChatMessage(Base, TimestampMixin):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     # A direct reply to another message is player-to-player and never wakes the AI.
     reply_to_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("chat_messages.id"), nullable=True)
+    # Detected expression for kind="ai" messages (e.g. "happy", "sad"); unused for others.
+    emotion: Mapped[str] = mapped_column(String(16), nullable=True)
 
     room: Mapped[Room] = relationship(back_populates="messages")
     reply_to: Mapped["ChatMessage"] = relationship(remote_side=[id])

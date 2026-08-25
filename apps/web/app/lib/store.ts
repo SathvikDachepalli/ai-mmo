@@ -71,6 +71,7 @@ export interface RoomState {
       kind: string;
       body: string;
       reply_to: { id: string; author_name: string; body: string } | null;
+      emotion?: string | null;
     }[];
     has_more_history: boolean;
   }) => void;
@@ -83,6 +84,7 @@ export interface RoomState {
       kind: string;
       body: string;
       reply_to: { id: string; author_name: string; body: string } | null;
+      emotion?: string | null;
     }[],
     hasMore: boolean
   ) => void;
@@ -172,6 +174,7 @@ export const useRoom = create<RoomState>((set) => ({
         author: m.author_name,
         text: m.body,
         replyTo: toReplyPreview(m.reply_to),
+        emotion: m.kind === "ai" ? toEmotion(m.emotion ?? undefined) : undefined,
       })),
       hasMoreHistory: d.has_more_history,
       oldestMessageId: d.history.length > 0 ? d.history[0].id : null,
@@ -187,6 +190,7 @@ export const useRoom = create<RoomState>((set) => ({
           author: m.author_name,
           text: m.body,
           replyTo: toReplyPreview(m.reply_to),
+          emotion: m.kind === "ai" ? toEmotion(m.emotion ?? undefined) : undefined,
         })),
         ...s.entries,
       ],

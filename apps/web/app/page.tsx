@@ -50,6 +50,7 @@ import {
   getMessages,
   deleteRoomByCode,
   updateRoomPrompt,
+  inviteToRoom,
   type MyRoom,
 } from "./lib/rooms";
 import { listAllRooms, deleteRoom, type AdminRoom } from "./lib/admin";
@@ -978,6 +979,77 @@ function RulesPanel({ code, isHost, onClose }: { code: string; isHost: boolean; 
   );
 }
 
+/* -------------------------------- Invite panel -------------------------------- */
+
+function InvitePanel({ code, onClose }: { code: string; onClose: () => void }) {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [invited, setInvited] = useState<string | null>(null);
+
+  const invite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = getToken();
+    if (!token || !email.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      await inviteToRoom(token, code, email.trim());
+      setInvited(email.trim());
+      setEmail("");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: "auto", opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="overflow-hidden border-b border-[var(--color-border)] bg-[var(--color-surface)]/60"
+    >
+      <div className="px-4 sm:px-6 py-3 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-[var(--color-primary)] font-mono">
+            <UserPlus size={12} />
+            Invite by email
+          </span>
+          <button
+            onClick={onClose}
+            className="text-[var(--color-foreground-subtle)] hover:text-[var(--color-foreground)] cursor-pointer"
+          >
+            <X size={14} />
+          </button>
+        </div>
+        <form onSubmit={invite} className="flex items-center gap-2">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="friend@example.com"
+            className="input-field flex-1"
+            autoFocus
+          />
+          <PixelButton type="submit" disabled={busy || !email.trim()}>
+            {busy ? <Loader2 size={14} className="animate-spin" /> : "Invite"}
+          </PixelButton>
+        </form>
+        <p className="text-xs text-[var(--color-foreground-subtle)]">
+          They'll see this room in their room list next time they log in — no code needed.
+        </p>
+        {invited ? (
+          <p className="text-xs text-[var(--color-primary)]">Invited {invited}.</p>
+        ) : null}
+        {error ? <p className="text-xs text-[var(--color-accent)]">{error}</p> : null}
+      </div>
+    </motion.div>
+  );
+}
+
 /* -------------------------------- Chat room -------------------------------- */
 
 function ChatRoomScreen({ code, onLeave }: { code: string; onLeave: () => void }) {
@@ -987,6 +1059,7 @@ function ChatRoomScreen({ code, onLeave }: { code: string; onLeave: () => void }
   const [showRules, setShowRules] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [showHostMenu, setShowHostMenu] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -1160,6 +1233,10 @@ function ChatRoomScreen({ code, onLeave }: { code: string; onLeave: () => void }
                   {showHostMenu ? (
                     <HostMenu
                       canEndRoom={!room.closed}
+                      onInvite={() => {
+                        setShowHostMenu(false);
+                        setShowInvite(true);
+                      }}
                       onEndRoom={() => {
                         setShowHostMenu(false);
                         handleEndRoom();
@@ -1189,6 +1266,10 @@ function ChatRoomScreen({ code, onLeave }: { code: string; onLeave: () => void }
           {showRules ? (
             <RulesPanel code={code} isHost={isHost} onClose={() => setShowRules(false)} />
           ) : null}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showInvite ? <InvitePanel code={code} onClose={() => setShowInvite(false)} /> : null}
         </AnimatePresence>
 
         <AnimatePresence>
@@ -1385,11 +1466,13 @@ function MembersDrawer({
  * narrow screens instead of a row of always-visible buttons. */
 function HostMenu({
   canEndRoom,
+  onInvite,
   onEndRoom,
   onDeleteRoom,
   onClose,
 }: {
   canEndRoom: boolean;
+  onInvite: () => void;
   onEndRoom: () => void;
   onDeleteRoom: () => void;
   onClose: () => void;
@@ -1404,6 +1487,13 @@ function HostMenu({
         transition={{ duration: 0.15 }}
         className="absolute right-0 top-11 z-50 w-48 rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl shadow-black/40 py-1.5 overflow-hidden"
       >
+        <button
+          onClick={onInvite}
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-foreground)] hover:bg-[var(--color-surface-raised)] transition-colors duration-150 cursor-pointer"
+        >
+          <UserPlus size={14} />
+          Invite people
+        </button>
         {canEndRoom ? (
           <button
             onClick={onEndRoom}

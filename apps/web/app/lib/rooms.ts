@@ -41,7 +41,7 @@ export async function createRoom(token: string, name: string, opts: CreateRoomOp
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       name,
-      min_players: opts.minPlayers ?? 2,
+      min_players: opts.minPlayers ?? 1,
       max_players: opts.maxPlayers ?? 10,
       system_prompt: opts.systemPrompt ?? "",
     }),
@@ -55,6 +55,17 @@ export async function updateRoomPrompt(token: string, code: string, systemPrompt
     method: "PATCH",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ system_prompt: systemPrompt }),
+  });
+  return unwrap<RoomInfo>(res);
+}
+
+/** Host-only: adds another account to the room by email -- it shows up in
+ * their "my rooms" list the next time they log in, no code needed. */
+export async function inviteToRoom(token: string, code: string, email: string): Promise<RoomInfo> {
+  const res = await fetch(`${API}/rooms/${code}/invite`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ email }),
   });
   return unwrap<RoomInfo>(res);
 }

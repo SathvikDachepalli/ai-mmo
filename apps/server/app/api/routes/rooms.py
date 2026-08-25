@@ -253,6 +253,53 @@ async def update_room(
     return await _room_out(session, room)
 
 
+class RoomInvite(BaseModel):
+    email: str
+
+
+@router.post("/{code}/invite", response_model=RoomOut)
+async def invite_to_room(
+    code: str,
+    body: RoomInvite,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Host-only: add another account to this room directly by email. This
+    creates their membership immediately, so the room shows up in their
+    GET /rooms/mine list the next time they log in -- no code needed."""
+    room = await session.scalar(select(Room).where(Room.code == code.strip().upper()))
+    if room is None:
+        raise HTTPException(status_code=404, detail="No room with that code")
+    if room.host_user_id != user.id:
+        raise HTTPException(status_code=403, detail="Only the host can invite people")
+
+    email = body.email.strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email required")
+    target = await session.scalar(select(User).where(func.lower(User.email) == email))
+    if target is None:
+        raise HTTPException(status_code=404, detail="No account with that email")
+    if target.id == user.id:
+        raise HTTPException(status_code=400, detail="You're already in this room")
+
+    existing = await session.scalar(
+        select(RoomMember).where(RoomMember.room_id == room.id, RoomMember.user_id == target.id)
+    )
+    if existing is None:
+        count = await session.scalar(
+            select(func.count()).select_from(RoomMember).where(RoomMember.room_id == room.id)
+        )
+        if (count or 0) >= room.max_players:
+            raise HTTPException(status_code=400, detail=f"Room is full ({room.max_players} max)")
+        member = RoomMember(
+            room_id=room.id, user_id=target.id, display_name=target.display_name or "Player"
+        )
+        session.add(member)
+        await session.commit()
+
+    return await _room_out(session, room)
+
+
 class ReplyPreviewOut(BaseModel):
     id: str
     author_name: str

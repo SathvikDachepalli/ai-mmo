@@ -1,0 +1,258 @@
+@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Poppins:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+/*
+ * Retro pixel-OS mood: dark navy/near-black windows with thin gray borders,
+ * a single muted-mint accent, and off-white text — a fictional operating
+ * system running a shared world, not a SaaS dashboard. Dark mode is this
+ * palette's native register (a CRT doesn't have a "light mode"); light mode
+ * is a paper-terminal analog in the same navy/mint family so the toggle
+ * still means something instead of being dropped.
+ */
+:root {
+  --color-background: #eaf2f0;
+  --color-surface: #ffffff;
+  --color-surface-raised: #dce8e3;
+  --color-foreground: #0b1420;
+  --color-foreground-subtle: #4b5a5c;
+  --color-muted: #5c6b6d;
+  --color-primary: #2f6f63;
+  --color-primary-hover: #3d8375;
+  --color-primary-foreground: #ffffff;
+  --color-accent: #a6453b;
+  --color-arcane: #2f6f63;
+  --color-ember: #3e7d71;
+  --color-success: #2f7d5a;
+  --color-border: #c7d3ce;
+  --color-border-strong: #9bafa9;
+  --color-ring: #2f6f63;
+
+  --font-display: "Pixelify Sans", "JetBrains Mono", monospace;
+  --font-sans: "Pixelify Sans", "JetBrains Mono", monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  /* Chat bubbles, AI narration, and other body copy — separate from
+     --font-display (window chrome, titles, labels, buttons stay Pixelify
+     always). Defaults to Poppins; a settings toggle can switch it back to
+     Pixelify by setting data-chat-font="pixelify" on <html>. */
+  --font-body: "Poppins", "Inter", sans-serif;
+}
+
+:root[data-chat-font="pixelify"] {
+  --font-body: "Pixelify Sans", "JetBrains Mono", monospace;
+}
+
+/* System preference, when the user hasn't explicitly chosen a theme. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-background: #060b12;
+    --color-surface: #0d1722;
+    --color-surface-raised: #101b28;
+    --color-foreground: #e5e7e5;
+    --color-foreground-subtle: #aebbb8;
+    --color-muted: #aebbb8;
+    --color-primary: #9bcfc2;
+    --color-primary-hover: #b3ddd2;
+    --color-primary-foreground: #0b1420;
+    --color-accent: #c97b72;
+    --color-arcane: #9bcfc2;
+    --color-ember: #6fa89e;
+    --color-success: #6fa89e;
+    --color-border: #5f6b72;
+    --color-border-strong: #77828a;
+    --color-ring: #9bcfc2;
+  }
+}
+
+/* Explicit toggle wins over system preference in both directions. */
+:root[data-theme="dark"] {
+  --color-background: #060b12;
+  --color-surface: #0d1722;
+  --color-surface-raised: #101b28;
+  --color-foreground: #e5e7e5;
+  --color-foreground-subtle: #aebbb8;
+  --color-muted: #aebbb8;
+  --color-primary: #9bcfc2;
+  --color-primary-hover: #b3ddd2;
+  --color-primary-foreground: #0b1420;
+  --color-accent: #c97b72;
+  --color-arcane: #9bcfc2;
+  --color-ember: #6fa89e;
+  --color-success: #6fa89e;
+  --color-border: #5f6b72;
+  --color-border-strong: #77828a;
+  --color-ring: #9bcfc2;
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+  --font-body: var(--font-body);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--color-background);
+  background-image: radial-gradient(ellipse 70% 40% at 50% 0%, color-mix(in srgb, var(--color-primary) 6%, transparent), transparent);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  letter-spacing: 0.01em;
+}
+
+::selection {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+/* Faint CRT scanlines — a fixed overlay, not applied per-window, so it
+ * never fights message-log readability. Opacity is a token so light mode
+ * (which has no real CRT analog) gets a much subtler pass than dark. */
+:root {
+  --crt-opacity: 0.35;
+}
+:root[data-theme="dark"] {
+  --crt-opacity: 0.6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --crt-opacity: 0.6;
+  }
+}
+.crt-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--crt-opacity);
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.05) 0px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: multiply;
+}
+
+/* Scrollbar for the chat log, tuned to the border tokens */
+.ember-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+.ember-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.ember-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ember-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
+.ember-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+.input-field {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-foreground);
+  outline: none;
+  transition: box-shadow 150ms, border-color 150ms;
+}
+.input-field::placeholder {
+  color: var(--color-foreground-subtle);
+}
+.input-field:focus {
+  border-color: var(--color-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-ring) 30%, transparent);
+}
+
+/* A retro window: thin border, subtle inner top highlight, near-flat —
+ * depth comes from the border + header divider, never a soft drop shadow. */
+.retro-window {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* Pixel speech bubble: stepped (notched) corners instead of a curve, and a
+ * thick outline built from two stacked notched layers rather than a CSS
+ * border (a border can't follow a clip-path stepped edge). Always a white
+ * fill + near-black outline, comic-panel style, regardless of theme —
+ * that flat black/white contrast against either background is the point. */
+.pixel-bubble {
+  --notch: 5px;
+  --pixel-border: 3px;
+  position: relative;
+  display: inline-block;
+  background: #0b0b0c;
+  clip-path: polygon(
+    var(--notch) 0, calc(100% - var(--notch)) 0,
+    calc(100% - var(--notch)) var(--notch), 100% var(--notch),
+    100% calc(100% - var(--notch)), calc(100% - var(--notch)) calc(100% - var(--notch)),
+    calc(100% - var(--notch)) 100%, var(--notch) 100%,
+    var(--notch) calc(100% - var(--notch)), 0 calc(100% - var(--notch)),
+    0 var(--notch), var(--notch) var(--notch)
+  );
+  padding: var(--pixel-border);
+}
+.pixel-bubble-fill {
+  background: #f4f4f2;
+  color: #0b0b0c;
+  clip-path: inherit;
+  padding: 0.5rem 0.75rem;
+}
+.pixel-bubble.pixel-bubble-tint .pixel-bubble-fill {
+  background: color-mix(in srgb, var(--color-primary) 12%, #f4f4f2);
+}
+/* Two small notched squares stepping away from the bubble, mimicking the
+ * reference's blocky tail + detached dot. Mirrored via [data-side="right"]. */
+.pixel-bubble-tail {
+  position: absolute;
+  bottom: -6px;
+  left: 14px;
+  width: 10px;
+  height: 10px;
+  background: #0b0b0c;
+}
+.pixel-bubble-tail::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  background: #f4f4f2;
+}
+.pixel-bubble-dot {
+  position: absolute;
+  bottom: -14px;
+  left: 6px;
+  width: 5px;
+  height: 5px;
+  background: #0b0b0c;
+}
+.pixel-bubble[data-side="right"] .pixel-bubble-tail {
+  left: auto;
+  right: 14px;
+}
+.pixel-bubble[data-side="right"] .pixel-bubble-dot {
+  left: auto;
+  right: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

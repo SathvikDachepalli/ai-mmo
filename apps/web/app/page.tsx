@@ -376,7 +376,7 @@ function Lobby({
 }) {
   const [tab, setTab] = useState<"create" | "join">("create");
   const [roomName, setRoomName] = useState("");
-  const [minPlayers, setMinPlayers] = useState(2);
+  const [minPlayers, setMinPlayers] = useState(1);
   const [maxPlayers, setMaxPlayers] = useState(10);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -458,11 +458,11 @@ function Lobby({
               <Field icon={<Users size={16} />} label="Min players" className="flex-1 min-w-0">
                 <input
                   type="number"
-                  min={2}
+                  min={1}
                   max={maxPlayers}
                   value={minPlayers}
                   onChange={(e) => {
-                    const v = Math.max(2, Math.min(Number(e.target.value) || 2, maxPlayers));
+                    const v = Math.max(1, Math.min(Number(e.target.value) || 1, maxPlayers));
                     setMinPlayers(v);
                   }}
                   className="input-field w-full"

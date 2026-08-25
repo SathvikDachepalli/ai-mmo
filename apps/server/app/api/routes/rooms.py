@@ -22,7 +22,7 @@ router = APIRouter(prefix="/rooms", tags=["rooms"])
 
 CODE_ALPHABET = string.ascii_uppercase + string.digits
 CODE_LENGTH = 6
-MIN_PLAYERS_FLOOR = 2
+MIN_PLAYERS_FLOOR = 1
 MAX_PLAYERS_CEILING = 10
 SYSTEM_PROMPT_MAX_LEN = 2000
 
@@ -45,7 +45,7 @@ async def _generate_unique_code(session: AsyncSession) -> str:
 class RoomCreate(BaseModel):
     name: str
     display_name: str | None = None
-    min_players: int = 2
+    min_players: int = 1
     max_players: int = 10
     system_prompt: str | None = None
 

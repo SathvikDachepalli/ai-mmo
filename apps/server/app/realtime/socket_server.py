@@ -58,10 +58,12 @@ async def connect(sid, environ, auth):
         member.is_online = True
         await session.commit()
 
-        room_id, display_name = room.id, member.display_name
+        room_id, display_name, min_players = room.id, member.display_name, room.min_players
 
     room_lifecycle.cancel_pending_close(room_id)
-    get_manager().register(ConnectionInfo(sid=sid, room_id=room_id, user_id=account.id, name=display_name))
+    get_manager().register(
+        ConnectionInfo(sid=sid, room_id=room_id, user_id=account.id, name=display_name, min_players=min_players)
+    )
     await sio.enter_room(sid, room_channel(room_id))
 
     await _maybe_activate(room_id)
@@ -126,8 +128,12 @@ async def chat_message(sid, data):
     if not text:
         return
 
-    if get_manager().online_count(conn.room_id) < 2:
-        await sio.emit(events.ERROR, {"detail": "Need at least 2 people in the room to chat."}, to=sid)
+    if get_manager().online_count(conn.room_id) < conn.min_players:
+        await sio.emit(
+            events.ERROR,
+            {"detail": f"Need at least {conn.min_players} people in the room to chat."},
+            to=sid,
+        )
         return
 
     if ai_room.is_streaming(conn.room_id):
@@ -166,7 +172,9 @@ async def chat_message(sid, data):
         )
         session.add(msg)
         await session.commit()
-        await session.refresh(msg)
+        # id/created_at are Python-side defaults (see _uuid/_now), already
+        # populated on `msg` at flush time -- no need to round-trip a
+        # refresh() just to read back values we already have.
         payload = {
             "id": str(msg.id),
             "user_id": str(conn.user_id),

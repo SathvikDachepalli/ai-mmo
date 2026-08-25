@@ -262,7 +262,6 @@ async def _save_and_broadcast(room_id, text: str, emotion: str = "neutral") -> N
         msg = ChatMessage(room_id=room_id, user_id=None, author_name="AI", kind="ai", body=text, emotion=emotion)
         session.add(msg)
         await session.commit()
-        await session.refresh(msg)
         payload = {
             "id": str(msg.id),
             "user_id": None,

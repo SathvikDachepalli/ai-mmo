@@ -265,7 +265,12 @@ async def _fetch_history(room_id) -> list[dict]:
     return [{"author_name": m.author_name, "body": m.body, "kind": m.kind} for m in rows]
 
 
-EMOTION_PREFIX_RE = re.compile(r"^\[(?:emotion:\s*)?([a-zA-Z]+)\]\s*\n*", re.IGNORECASE)
+# Accepts whatever bracket style the model drifts to: "[emotion: happy]",
+# "[happy]", "(expression: happy)", "(happy)" -- any single bracketed/
+# parenthesized word as the very first thing in the reply.
+EMOTION_PREFIX_RE = re.compile(
+    r"^[\[\(]\s*(?:emotion|expression)?\s*:?\s*([a-zA-Z]+)\s*[\]\)]\s*\n*", re.IGNORECASE
+)
 EMOTION_PREFIX_MAX_BUFFER = 80  # give up waiting for the tag past this many chars
 
 

@@ -43,7 +43,9 @@ async def connect(sid, environ, auth):
         if room is None:
             raise socketio.exceptions.ConnectionRefusedError("no room with that code")
         if room.status == "closed":
-            raise socketio.exceptions.ConnectionRefusedError("this room is closed")
+            # Anyone who still has the code can bring a closed room back --
+            # closing just means "empty/ended", not "gone forever".
+            room.status = "waiting"
 
         member = await session.scalar(
             select(RoomMember).where(RoomMember.room_id == room.id, RoomMember.user_id == account.id)

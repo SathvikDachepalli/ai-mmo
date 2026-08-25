@@ -190,7 +190,9 @@ async def join_room(
     if room is None:
         raise HTTPException(status_code=404, detail="No room with that code")
     if room.status == "closed":
-        raise HTTPException(status_code=400, detail="This room is closed")
+        # Anyone who still has the code can bring a closed room back --
+        # closing just means "empty/ended", not "gone forever".
+        room.status = "waiting"
 
     existing = await session.scalar(
         select(RoomMember).where(RoomMember.room_id == room.id, RoomMember.user_id == user.id)
@@ -207,6 +209,8 @@ async def join_room(
             display_name=(body.display_name or user.display_name or "Player").strip(),
         )
         session.add(member)
+        await session.commit()
+    elif session.is_modified(room):
         await session.commit()
     return await _room_out(session, room)
 

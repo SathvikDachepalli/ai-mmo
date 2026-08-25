@@ -14,7 +14,7 @@ from sqlalchemy import select
 from app.api.auth.socket_auth import account_from_token
 from app.db.models import ChatMessage, Room, RoomMember
 from app.db.session import session_factory
-from app.realtime import ai_room, chat_history, events, room_lifecycle
+from app.realtime import ai_room, chat_history, events, presence, room_lifecycle
 from app.realtime.manager import ConnectionInfo, get_manager
 from app.realtime.rooms import room_channel
 
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 ai_room.configure(sio)
 room_lifecycle.configure(sio)
+presence.configure(sio, on_offline=lambda room_id: _broadcast_presence(room_id))
 
 
 @sio.event
@@ -63,6 +64,9 @@ async def connect(sid, environ, auth):
         room_id, display_name, min_players = room.id, member.display_name, room.min_players
 
     room_lifecycle.cancel_pending_close(room_id)
+    # A reconnect inside the grace window (refresh, brief network drop) was
+    # never announced as "left" -- don't announce it as "joined" either.
+    was_reconnect = presence.cancel_pending_offline(room_id, account.id)
     get_manager().register(
         ConnectionInfo(sid=sid, room_id=room_id, user_id=account.id, name=display_name, min_players=min_players)
     )
@@ -70,12 +74,13 @@ async def connect(sid, environ, auth):
 
     await _maybe_activate(room_id)
     await _emit_room_joined(sid, room_id, code)
-    await sio.emit(
-        events.MEMBER_JOINED,
-        {"user_id": str(account.id), "display_name": display_name},
-        to=room_channel(room_id),
-        skip_sid=sid,
-    )
+    if not was_reconnect:
+        await sio.emit(
+            events.MEMBER_JOINED,
+            {"user_id": str(account.id), "display_name": display_name},
+            to=room_channel(room_id),
+            skip_sid=sid,
+        )
     await _broadcast_presence(room_id)
     return True
 
@@ -85,21 +90,11 @@ async def disconnect(sid):
     conn = get_manager().unregister(sid)
     if not conn:
         return
-    async with session_factory() as session:
-        member = await session.scalar(
-            select(RoomMember).where(RoomMember.room_id == conn.room_id, RoomMember.user_id == conn.user_id)
-        )
-        if member:
-            member.is_online = False
-            await session.commit()
-
     await sio.leave_room(sid, room_channel(conn.room_id))
-    await sio.emit(
-        events.MEMBER_LEFT,
-        {"user_id": str(conn.user_id), "display_name": conn.name},
-        to=room_channel(conn.room_id),
-    )
-    await _broadcast_presence(conn.room_id)
+    # Don't immediately flip them offline / announce "left" -- a refresh or
+    # brief network drop shouldn't be visible to everyone else. Only after
+    # OFFLINE_GRACE_SECONDS with no reconnect does presence actually update.
+    presence.schedule_offline_if_disconnected(conn.room_id, conn.user_id, conn.name)
     room_lifecycle.schedule_close_if_empty(conn.room_id)
 
 

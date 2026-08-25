@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, animate, motion, useMotionValue, useTransform, type PanInfo } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -1585,27 +1585,85 @@ function EntryRow({ entry, youId }: { entry: ChatEntry; youId: string }) {
         >
           {entry.author}
         </span>
-        <PixelBubble side={isSelf ? "right" : "left"} tinted={isSelf}>
-          {entry.replyTo ? <ReplyQuote quote={entry.replyTo} /> : null}
-          {entry.text}
-        </PixelBubble>
+        <SwipeToReply side={isSelf ? "right" : "left"} onReply={() => startReply(entry)}>
+          <PixelBubble side={isSelf ? "right" : "left"} tinted={isSelf}>
+            {entry.replyTo ? <ReplyQuote quote={entry.replyTo} /> : null}
+            {entry.text}
+          </PixelBubble>
+        </SwipeToReply>
       </div>
       <ReplyButton entry={entry} />
     </motion.div>
   );
 }
 
+function startReply(entry: ChatEntry): void {
+  useRoom.getState().setReplyDraft({ id: entry.id, authorName: entry.author, body: entry.text });
+}
+
 function ReplyButton({ entry }: { entry: ChatEntry }) {
   return (
     <button
-      onClick={() =>
-        useRoom.getState().setReplyDraft({ id: entry.id, authorName: entry.author, body: entry.text })
-      }
+      onClick={() => startReply(entry)}
       title="Reply"
       className="opacity-0 group-hover:opacity-100 self-center shrink-0 text-[var(--color-foreground-subtle)] hover:text-[var(--color-primary)] transition-opacity duration-150 cursor-pointer"
     >
       <Reply size={14} />
     </button>
+  );
+}
+
+const SWIPE_REPLY_THRESHOLD = 56;
+
+/** Mobile swipe-to-reply: drag a message bubble horizontally past the
+ * threshold to reply to it, matching the WhatsApp/Telegram gesture. Desktop
+ * keeps the hover ReplyButton; this is additive, not a replacement. */
+function SwipeToReply({
+  side,
+  onReply,
+  children,
+}: {
+  side: "left" | "right";
+  onReply: () => void;
+  children: React.ReactNode;
+}) {
+  const x = useMotionValue(0);
+  const iconOpacity = useTransform(
+    x,
+    side === "left" ? [0, SWIPE_REPLY_THRESHOLD] : [-SWIPE_REPLY_THRESHOLD, 0],
+    side === "left" ? [0, 1] : [1, 0]
+  );
+  const constraints = side === "left" ? { left: 0, right: 96 } : { left: -96, right: 0 };
+
+  const handleDragEnd = (_: unknown, info: PanInfo) => {
+    const passed =
+      side === "left" ? info.offset.x > SWIPE_REPLY_THRESHOLD : info.offset.x < -SWIPE_REPLY_THRESHOLD;
+    if (passed) onReply();
+    animate(x, 0, { type: "spring", stiffness: 500, damping: 40 });
+  };
+
+  return (
+    <div className="relative">
+      <motion.span
+        aria-hidden
+        className={`absolute inset-y-0 flex items-center text-[var(--color-primary)] pointer-events-none ${
+          side === "left" ? "left-1" : "right-1"
+        }`}
+        style={{ opacity: iconOpacity }}
+      >
+        <Reply size={16} />
+      </motion.span>
+      <motion.div
+        drag="x"
+        dragConstraints={constraints}
+        dragElastic={0.3}
+        dragMomentum={false}
+        style={{ x, touchAction: "pan-y" }}
+        onDragEnd={handleDragEnd}
+      >
+        {children}
+      </motion.div>
+    </div>
   );
 }
 

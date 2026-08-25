@@ -49,6 +49,11 @@ class ConnectionManager:
     def online_count(self, room_id: UUID) -> int:
         return len(self._by_room.get(str(room_id), {}))
 
+    def has_user(self, room_id: UUID, user_id: UUID) -> bool:
+        """True if this user has any live connection in the room (possibly a
+        different tab/sid than the one that just disconnected)."""
+        return any(c.user_id == user_id for c in self._by_room.get(str(room_id), {}).values())
+
 
 # Singleton manager shared across the app.
 manager: ConnectionManager | None = None

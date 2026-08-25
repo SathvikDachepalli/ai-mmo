@@ -1,10 +1,13 @@
 """FastAPI entrypoint mounting the Socket.IO ASGI app and REST routes."""
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.keepalive import keepalive_loop
 from app.realtime.manager import init_manager
 from app.realtime.socket_server import make_app, sio
 
@@ -15,7 +18,17 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
-app = FastAPI(title="ai-mmo-server", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(keepalive_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+
+
+app = FastAPI(title="ai-mmo-server", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

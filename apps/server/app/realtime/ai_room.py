@@ -19,7 +19,6 @@ separate, simpler "chat participant" concern for plain chat rooms.
 """
 import asyncio
 import logging
-import re
 import time
 from collections import Counter, deque
 from typing import Optional
@@ -27,8 +26,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from app.ai.chat import search as web_search
-from app.ai.chat.responder import EMOTIONS, decide_search_query, stream_reply
+from app.ai.chat.graph import run_chat_turn
 from app.db.models import ChatMessage, Room
 from app.db.session import session_factory
 from app.realtime import events
@@ -181,7 +179,6 @@ async def _run_ai_turn(room_id) -> bool:
         return True
 
     room_system_prompt = await _fetch_system_prompt(room_id)
-    search_context = await _maybe_search(history)
 
     st = _state(room_id)
     st.streaming = True
@@ -195,13 +192,21 @@ async def _run_ai_turn(room_id) -> bool:
         # once before giving up, and say something if it still fails.
         emotion = "neutral"
         for attempt in range(1, STREAM_MAX_ATTEMPTS + 1):
-            chunks: list[str] = []
+            emitted_emotion = False
             await _sio.emit(events.AI_STREAM_START, {}, to=channel)
+
+            async def _emit_chunk(delta: str) -> None:
+                await _sio.emit(events.AI_STREAM_CHUNK, {"delta": delta}, to=channel)
+
+            async def _emit_emotion(name: str) -> None:
+                nonlocal emitted_emotion
+                emitted_emotion = True
+                await _sio.emit(events.AI_EMOTION, {"emotion": name}, to=channel)
+
             try:
-                emotion = await _stream_with_emotion(
-                    stream_reply(history, room_system_prompt, search_context), chunks, channel
+                text, emotion = await run_chat_turn(
+                    history, room_system_prompt, _emit_chunk, _emit_emotion
                 )
-                text = "".join(chunks).strip()
                 last_error = None
                 break
             except asyncio.CancelledError:
@@ -209,11 +214,14 @@ async def _run_ai_turn(room_id) -> bool:
             except Exception as exc:
                 last_error = exc
                 logger.warning(
-                    "AI stream attempt %d/%d failed for room %s: %s",
+                    "AI turn attempt %d/%d failed for room %s: %s",
                     attempt, STREAM_MAX_ATTEMPTS, room_id, exc,
                 )
                 if attempt < STREAM_MAX_ATTEMPTS:
                     await asyncio.sleep(STREAM_RETRY_DELAY_SECONDS)
+            finally:
+                if not emitted_emotion:
+                    await _sio.emit(events.AI_EMOTION, {"emotion": "neutral"}, to=channel)
 
         if last_error is not None:
             await _sio.emit(
@@ -237,22 +245,6 @@ async def _fetch_system_prompt(room_id) -> str:
         return room.system_prompt if room else ""
 
 
-async def _maybe_search(history: list[dict]) -> str | None:
-    """Best-effort web search for current-events questions. Never blocks the
-    reply on failure -- returns None on any error or when search is off."""
-    if not web_search.is_configured():
-        return None
-    try:
-        query = await decide_search_query(history)
-        if not query:
-            return None
-        results = await web_search.search(query)
-        return web_search.format_results(results) if results else None
-    except Exception:
-        logger.warning("Web search step failed; answering without it", exc_info=True)
-        return None
-
-
 async def _fetch_history(room_id) -> list[dict]:
     async with session_factory() as session:
         result = await session.execute(
@@ -263,64 +255,6 @@ async def _fetch_history(room_id) -> list[dict]:
         )
         rows = list(reversed(result.scalars().all()))
     return [{"author_name": m.author_name, "body": m.body, "kind": m.kind} for m in rows]
-
-
-# Accepts whatever bracket style the model drifts to: "[emotion: happy]",
-# "[happy]", "(expression: happy)", "(happy)" -- any single bracketed/
-# parenthesized word as the very first thing in the reply.
-EMOTION_PREFIX_RE = re.compile(
-    r"^[\[\(]\s*(?:emotion|expression)?\s*:?\s*([a-zA-Z]+)\s*[\]\)]\s*\n*", re.IGNORECASE
-)
-EMOTION_PREFIX_MAX_BUFFER = 80  # give up waiting for the tag past this many chars
-
-
-async def _stream_with_emotion(chunk_iter, chunks: list[str], channel: str) -> str:
-    """Consume the reply stream, pulling the leading `[emotion: x]` tag the
-    model is asked to lead with out of the visible text. Emits AI_EMOTION
-    once (falling back to "neutral" if the model never produced a valid tag,
-    e.g. the deterministic provider) and appends only the user-visible text
-    to `chunks`. Returns the detected emotion."""
-    buffer = ""
-    detected = False
-    emotion = "neutral"
-
-    async def _flush_prefix_miss():
-        nonlocal detected
-        detected = True
-        await _sio.emit(events.AI_EMOTION, {"emotion": emotion}, to=channel)
-        if buffer:
-            chunks.append(buffer)
-            await _sio.emit(events.AI_STREAM_CHUNK, {"delta": buffer}, to=channel)
-
-    async for chunk in chunk_iter:
-        if detected:
-            chunks.append(chunk)
-            await _sio.emit(events.AI_STREAM_CHUNK, {"delta": chunk}, to=channel)
-            continue
-
-        buffer += chunk
-        match = EMOTION_PREFIX_RE.match(buffer)
-        if match:
-            tag = match.group(1).lower()
-            emotion = tag if tag in EMOTIONS else "neutral"
-            detected = True
-            await _sio.emit(events.AI_EMOTION, {"emotion": emotion}, to=channel)
-            remainder = buffer[match.end():]
-            if remainder:
-                chunks.append(remainder)
-                await _sio.emit(events.AI_STREAM_CHUNK, {"delta": remainder}, to=channel)
-            buffer = ""
-        elif len(buffer) > EMOTION_PREFIX_MAX_BUFFER:
-            # Model didn't lead with a (valid) tag -- stop waiting and show
-            # what's buffered so far as plain text instead of holding the
-            # reply hostage to a formatting instruction it ignored.
-            await _flush_prefix_miss()
-            buffer = ""
-
-    if not detected:
-        await _flush_prefix_miss()
-
-    return emotion
 
 
 async def _save_and_broadcast(room_id, text: str, emotion: str = "neutral") -> None:

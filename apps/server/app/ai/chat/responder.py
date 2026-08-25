@@ -29,23 +29,29 @@ SYSTEM_PROMPT = (
     "relevant. Keep replies short (1-4 sentences) unless asked for more. "
     "If the recent messages are just people chatting with each other and "
     "don't need your input, you may respond briefly or move the conversation "
-    "along, but don't force yourself into every exchange.\n\n"
-    "You have a face that shows your reaction. Before your reply, output "
-    "exactly one line choosing the expression that matches your reaction to "
-    "what was just said, in the LITERAL form `[emotion: <name>]` -- square "
-    "brackets, the word \"emotion\", nothing else on that line -- then a "
-    "blank line, then your reply as normal. Never use parentheses or the "
-    "word \"expression\" for this tag; always `[emotion: <name>]` exactly. "
-    "Pick <name> from exactly this "
-    f"list: {', '.join(EMOTIONS)}. Use \"neutral\" for plain factual replies "
-    "-- only pick a stronger expression when the conversation actually "
+    "along, but don't force yourself into every exchange."
+)
+
+# Used by classify_emotion (a separate, structured call -- see graph.py) so
+# the reply text itself never has to carry a machine-readable tag. Earlier
+# versions asked the model to prefix its own reply with `[emotion: x]`, but
+# free-form text generation kept drifting the tag's exact format (different
+# brackets, wording, or omitting it), leaking raw tags into chat or losing
+# the expression entirely. A dedicated JSON-mode call has no format to drift.
+EMOTION_CLASSIFY_PROMPT = (
+    "You are picking a facial expression for an AI chat participant, based "
+    "on how it is about to react to the conversation below. Pick exactly "
+    "one name from this list: "
+    f"{', '.join(EMOTIONS)}. Use \"neutral\" for plain factual replies -- "
+    "only pick a stronger expression when the conversation actually "
     "warrants it (a joke -> happy/smirk, being asked something hard -> "
     "thinking, a rude message -> angry/mad, bad news -> sad, unexpected or "
-    "shocking news (good or bad) -> surprised, something that makes you "
+    "shocking news (good or bad) -> surprised, something that makes the AI "
     "personally excited/eager -> excited, etc.). \"surprised\" and "
     "\"excited\" are different: shock/disbelief at a sudden twist is "
-    "surprised, not excited -- don't default to excited just because your "
-    "reply is high-energy."
+    "surprised, not excited -- don't default to excited just because the "
+    "reply is high-energy.\n\n"
+    "Reply with JSON only: {\"emotion\": \"<name>\"}."
 )
 
 SEARCH_DECISION_PROMPT = """Decide whether answering the latest message well
@@ -108,6 +114,33 @@ async def decide_search_query(history: list[dict]) -> str | None:
         return None
     query = raw.get("query") if isinstance(raw, dict) else None
     return query.strip() if isinstance(query, str) and query.strip() else None
+
+
+async def classify_emotion(history: list[dict], room_system_prompt: str = "") -> str:
+    """Ask the model which expression fits its upcoming reaction, as its own
+    structured call -- see EMOTION_CLASSIFY_PROMPT for why this replaced the
+    old inline `[emotion: x]` tag. Falls back to "neutral" on any failure or
+    invalid value; never blocks or fails the actual reply."""
+    provider = get_provider()
+    if isinstance(provider, DeterministicProvider):
+        return "neutral"
+    recent = history[-8:]
+    context = "\n".join(
+        f"{'AI' if m['kind'] == 'ai' else m['author_name']}: {m['body']}" for m in recent
+    )
+    if room_system_prompt.strip():
+        context = f"[Room rules: {room_system_prompt.strip()}]\n{context}"
+    messages = [
+        ProviderMessage("system", EMOTION_CLASSIFY_PROMPT),
+        ProviderMessage("user", context),
+    ]
+    try:
+        raw = await provider.complete_json(messages, EMOTION_CLASSIFY_PROMPT)
+    except Exception:
+        logger.warning("Emotion-classification call failed; defaulting to neutral", exc_info=True)
+        return "neutral"
+    emotion = raw.get("emotion") if isinstance(raw, dict) else None
+    return emotion.strip().lower() if isinstance(emotion, str) and emotion.strip().lower() in EMOTIONS else "neutral"
 
 
 async def stream_reply(

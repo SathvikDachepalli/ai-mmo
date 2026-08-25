@@ -1,0 +1,20 @@
+# Python
+apps/server/.venv/
+apps/server/**/__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+apps/web/node_modules/
+apps/web/.next/
+apps/web/.vercel/
+apps/web/*.tsbuildinfo
+apps/web/next-env.d.ts
+
+# Env files -- never commit real secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store

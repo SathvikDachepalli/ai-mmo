@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: ai-mmo-server
+    runtime: python
+    plan: free
+    rootDir: apps/server
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_SYNC
+        sync: false
+      - key: AI_PROVIDER
+        sync: false
+      - key: AI_MODEL
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_BASE_URL
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: AUTH_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

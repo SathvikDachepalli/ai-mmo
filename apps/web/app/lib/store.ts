@@ -40,6 +40,7 @@ export interface RoomState {
   hostUserId: string;
   userId: string;
   connected: boolean;
+  joined: boolean;
   closed: boolean;
   members: Member[];
   typing: string[];
@@ -120,6 +121,7 @@ const initial = {
   hostUserId: "",
   userId: "",
   connected: false,
+  joined: false,
   closed: false,
   members: [] as Member[],
   typing: [] as string[],
@@ -154,6 +156,7 @@ export const useRoom = create<RoomState>((set) => ({
   setUserId: (v) => set({ userId: v }),
   setRoomJoined: (d) =>
     set({
+      joined: true,
       code: d.code,
       name: d.name,
       status: d.status as RoomState["status"],

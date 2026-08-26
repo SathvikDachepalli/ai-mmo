@@ -1127,7 +1127,7 @@ function ChatRoomScreen({ code, onLeave }: { code: string; onLeave: () => void }
   }, [code]);
 
   const onlineCount = room.members.filter((m) => m.isOnline).length;
-  const canChat = onlineCount >= room.minPlayers && !room.closed;
+  const canChat = room.joined && onlineCount >= room.minPlayers && !room.closed;
   const sendLocked = room.aiStreaming;
   const isHost = room.userId !== "" && room.userId === room.hostUserId;
 
@@ -1289,6 +1289,11 @@ function ChatRoomScreen({ code, onLeave }: { code: string; onLeave: () => void }
         {room.closed ? (
           <div className="bg-[var(--color-accent)]/10 text-[var(--color-accent)] px-4 py-2 text-sm border-b border-[var(--color-accent)]/25">
             This room has been closed. History below is read-only.
+          </div>
+        ) : !room.joined ? (
+          <div className="bg-[var(--color-primary)]/10 text-[var(--color-primary)] px-4 py-2 text-sm border-b border-[var(--color-primary)]/25 flex items-center gap-2">
+            <Loader2 size={14} className="animate-spin" />
+            Loading room…
           </div>
         ) : !canChat ? (
           <div className="bg-[var(--color-primary)]/10 text-[var(--color-primary)] px-4 py-2 text-sm border-b border-[var(--color-primary)]/25 flex items-center gap-2">

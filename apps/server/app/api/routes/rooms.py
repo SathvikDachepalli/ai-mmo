@@ -14,7 +14,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth.users import current_active_user
-from app.db.models import ChatMessage, Room, RoomMember, User
+from app.db.models import ChatMessage, Room, RoomBan, RoomMember, User
 from app.db.session import get_session
 from app.realtime import ai_room, chat_history, room_lifecycle
 
@@ -22,15 +22,12 @@ router = APIRouter(prefix="/rooms", tags=["rooms"])
 
 CODE_ALPHABET = string.ascii_uppercase + string.digits
 CODE_LENGTH = 6
-MIN_PLAYERS_FLOOR = 1
 MAX_PLAYERS_CEILING = 10
 SYSTEM_PROMPT_MAX_LEN = 2000
 
 
-def _clamp_capacity(min_players: int, max_players: int) -> tuple[int, int]:
-    lo = max(MIN_PLAYERS_FLOOR, min(min_players, MAX_PLAYERS_CEILING))
-    hi = max(lo, min(max_players, MAX_PLAYERS_CEILING))
-    return lo, hi
+def _clamp_capacity(max_players: int) -> int:
+    return max(1, min(max_players, MAX_PLAYERS_CEILING))
 
 
 async def _generate_unique_code(session: AsyncSession) -> str:
@@ -45,7 +42,6 @@ async def _generate_unique_code(session: AsyncSession) -> str:
 class RoomCreate(BaseModel):
     name: str
     display_name: str | None = None
-    min_players: int = 1
     max_players: int = 10
     system_prompt: str | None = None
 
@@ -71,7 +67,6 @@ class RoomOut(BaseModel):
     code: str
     name: str
     status: str
-    min_players: int
     max_players: int
     system_prompt: str
     host_user_id: uuid.UUID
@@ -86,7 +81,6 @@ async def _room_out(session: AsyncSession, room: Room) -> RoomOut:
         code=room.code,
         name=room.name,
         status=room.status,
-        min_players=room.min_players,
         max_players=room.max_players,
         system_prompt=room.system_prompt,
         host_user_id=room.host_user_id,
@@ -156,12 +150,11 @@ async def create_room(
     session: AsyncSession = Depends(get_session),
 ):
     code = await _generate_unique_code(session)
-    min_players, max_players = _clamp_capacity(body.min_players, body.max_players)
+    max_players = _clamp_capacity(body.max_players)
     room = Room(
         code=code,
         name=body.name.strip() or "Untitled Room",
         host_user_id=user.id,
-        min_players=min_players,
         max_players=max_players,
         system_prompt=(body.system_prompt or "").strip()[:SYSTEM_PROMPT_MAX_LEN],
     )
@@ -193,6 +186,15 @@ async def join_room(
         # Anyone who still has the code can bring a closed room back --
         # closing just means "empty/ended", not "gone forever".
         room.status = "waiting"
+
+    ban = await session.scalar(
+        select(RoomBan).where(
+            RoomBan.room_id == room.id,
+            (RoomBan.user_id == user.id) | (RoomBan.name_lower == (user.display_name or "").lower()),
+        )
+    )
+    if ban is not None:
+        raise HTTPException(status_code=403, detail="You've been banned from this room")
 
     existing = await session.scalar(
         select(RoomMember).where(RoomMember.room_id == room.id, RoomMember.user_id == user.id)

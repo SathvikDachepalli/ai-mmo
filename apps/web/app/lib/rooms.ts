@@ -14,7 +14,6 @@ export interface RoomInfo {
   code: string;
   name: string;
   status: "waiting" | "active" | "closed";
-  min_players: number;
   max_players: number;
   system_prompt: string;
   host_user_id: string;
@@ -30,7 +29,6 @@ async function unwrap<T>(res: Response): Promise<T> {
 }
 
 export interface CreateRoomOptions {
-  minPlayers?: number;
   maxPlayers?: number;
   systemPrompt?: string;
 }
@@ -41,7 +39,6 @@ export async function createRoom(token: string, name: string, opts: CreateRoomOp
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       name,
-      min_players: opts.minPlayers ?? 1,
       max_players: opts.maxPlayers ?? 10,
       system_prompt: opts.systemPrompt ?? "",
     }),

@@ -23,7 +23,6 @@ class AdminRoomOut(BaseModel):
     code: str
     name: str
     status: str
-    min_players: int
     host_email: str
     member_count: int
     online_count: int
@@ -60,7 +59,6 @@ async def list_rooms(
                 code=room.code,
                 name=room.name,
                 status=room.status,
-                min_players=room.min_players,
                 host_email=host.email if host else "?",
                 member_count=count or 0,
                 online_count=online or 0,

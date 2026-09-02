@@ -1,46 +1,44 @@
-"""Model picker API: list selectable models and switch at runtime.
+"""Model picker API: list OpenRouter's live catalog and switch at runtime.
 
-JWT-protected so only signed-in players can change the shared world's brain.
+Admin-only — switching the model affects every room on the shared server.
 """
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.ai import catalog
 from app.ai.providers.factory import get_provider, rebuild_provider
-from app.api.auth.users import current_active_user
+from app.api.auth.users import current_admin_user
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
-# Curated OpenRouter catalog (free tiers first). Kept server-side so the
-# client never needs to know provider details.
-MODELS: list[dict] = [
-    {"id": "deepseek/deepseek-chat-v3.1:free", "label": "DeepSeek V3.1 (free)"},
-    {"id": "meta-llama/llama-3.3-70b-instruct:free", "label": "Llama 3.3 70B (free)"},
-    {"id": "google/gemini-2.0-flash-exp:free", "label": "Gemini 2.0 Flash (free)"},
-    {"id": "anthropic/claude-sonnet-4.5", "label": "Claude Sonnet 4.5"},
-    {"id": "openai/gpt-4o-mini", "label": "GPT-4o mini"},
-]
-
 
 @router.get("/models")
-async def list_models(_: object = Depends(current_active_user)) -> dict:
+async def list_models(refresh: bool = False, _: object = Depends(current_admin_user)) -> dict:
     settings = get_settings()
-    current = get_provider().name
+    provider_name = get_provider().name
+    models, stale = await catalog.get_models(force=refresh)
     return {
         "current_model": settings.ai_model,
-        "provider": current,
-        "live": not current.startswith("deterministic"),
-        "models": MODELS,
+        "provider": provider_name,
+        "live": not provider_name.startswith("deterministic"),
+        # True when the catalog could not be refreshed, so the UI can say the
+        # list may be out of date rather than silently showing a fallback.
+        "stale": stale,
+        "models": models,
     }
 
 
 @router.post("/models/select")
-async def select_model(body: dict, _: object = Depends(current_active_user)) -> dict:
+async def select_model(body: dict, _: object = Depends(current_admin_user)) -> dict:
     model_id = (body.get("model_id") or "").strip()
-    if not any(m["id"] == model_id for m in MODELS):
-        return {"ok": False, "error": f"Unknown model '{model_id}'"}
-    p = rebuild_provider(model_id)
-    return {"ok": True, "current_model": model_id, "provider": p.name}
+    if not model_id:
+        raise HTTPException(status_code=400, detail="A model id is required")
+    if not await catalog.is_known_model(model_id):
+        raise HTTPException(status_code=400, detail=f"'{model_id}' is not in the OpenRouter catalog")
+
+    provider = rebuild_provider(model_id)
+    return {"ok": True, "current_model": model_id, "provider": provider.name}

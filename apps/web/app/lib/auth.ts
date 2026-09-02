@@ -11,6 +11,11 @@ export interface AuthUser {
   is_superuser: boolean;
 }
 
+/** Store a bearer token minted outside the login form (guest name+code flow). */
+export function setToken(token: string): void {
+  window.localStorage.setItem(TOKEN_KEY, token);
+}
+
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(TOKEN_KEY);

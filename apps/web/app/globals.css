@@ -159,6 +159,46 @@ body {
   background: var(--color-muted);
 }
 
+/* Long-form copy on the landing page. The display face stays Pixelify, but
+ * body text gets a real reading face, a larger size, looser leading, and a
+ * measure — the pixel font is identity, not something to read paragraphs in.
+ * Uses foreground-subtle rather than muted: muted only just clears AA on the
+ * pale background, and body copy is where that margin matters most. */
+.body-copy {
+  font-family: var(--font-body);
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  letter-spacing: 0;
+  color: var(--color-foreground-subtle);
+  max-width: 62ch;
+}
+@media (max-width: 640px) {
+  .body-copy {
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+}
+
+/* Small print that still has to be read (form hints, captions). Same family
+ * and color as .body-copy so it reads as the same voice, just quieter. */
+.body-copy-sm {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  letter-spacing: 0;
+  color: var(--color-foreground-subtle);
+}
+
+/* Uppercase mono section label. One class so every eyebrow on the page is
+ * the same size and tracking instead of drifting per section. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  color: var(--color-primary);
+}
+
 .input-field {
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border);

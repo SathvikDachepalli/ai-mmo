@@ -7,7 +7,6 @@ export interface AdminRoom {
   code: string;
   name: string;
   status: "waiting" | "active" | "closed";
-  min_players: number;
   host_email: string;
   member_count: number;
   online_count: number;

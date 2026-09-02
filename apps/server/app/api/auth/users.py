@@ -90,6 +90,12 @@ current_active_user = fastapi_users.current_user(active=True)
 current_admin_user = fastapi_users.current_user(active=True, superuser=True)
 
 
+async def mint_token(user: User) -> str:
+    """Issue the same bearer JWT the login route hands out, for a user we
+    created ourselves (the guest room-join flow)."""
+    return await _strategy().write_token(user)
+
+
 # --- Routes to be mounted by main.py ---
 
 def build_auth_routes(app):

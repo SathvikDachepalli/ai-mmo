@@ -30,11 +30,15 @@ export interface Member {
   isHost: boolean;
 }
 
+export interface PendingRequest {
+  requestId: string;
+  name: string;
+}
+
 export interface RoomState {
   code: string;
   name: string;
   status: "waiting" | "active" | "closed";
-  minPlayers: number;
   maxPlayers: number;
   systemPrompt: string;
   hostUserId: string;
@@ -53,6 +57,9 @@ export interface RoomState {
   aiEmotion: Emotion;
   replyDraft: ReplyPreview | null;
   lastError: string;
+  pendingRequests: PendingRequest[];
+  addPendingRequest: (r: PendingRequest) => void;
+  removePendingRequest: (requestId: string) => void;
   reset: () => void;
   setConnected: (v: boolean) => void;
   setUserId: (v: string) => void;
@@ -60,7 +67,6 @@ export interface RoomState {
     code: string;
     name: string;
     status: string;
-    min_players: number;
     max_players: number;
     system_prompt: string;
     host_user_id: string;
@@ -115,7 +121,6 @@ const initial = {
   code: "",
   name: "",
   status: "waiting" as const,
-  minPlayers: 2,
   maxPlayers: 10,
   systemPrompt: "",
   hostUserId: "",
@@ -134,6 +139,7 @@ const initial = {
   aiEmotion: "neutral" as Emotion,
   replyDraft: null as ReplyPreview | null,
   lastError: "",
+  pendingRequests: [] as PendingRequest[],
 };
 
 function toReplyPreview(r: { id: string; author_name: string; body: string } | null): ReplyPreview | null {
@@ -160,7 +166,6 @@ export const useRoom = create<RoomState>((set) => ({
       code: d.code,
       name: d.name,
       status: d.status as RoomState["status"],
-      minPlayers: d.min_players,
       maxPlayers: d.max_players,
       systemPrompt: d.system_prompt,
       hostUserId: d.host_user_id,
@@ -248,6 +253,10 @@ export const useRoom = create<RoomState>((set) => ({
   setClosed: () => set({ closed: true }),
   setSystemPrompt: (v) => set({ systemPrompt: v }),
   setError: (m) => set({ lastError: m }),
+  addPendingRequest: (r) =>
+    set((s) => ({ pendingRequests: [...s.pendingRequests.filter((p) => p.requestId !== r.requestId), r] })),
+  removePendingRequest: (requestId) =>
+    set((s) => ({ pendingRequests: s.pendingRequests.filter((p) => p.requestId !== requestId) })),
 }));
 
 // Standalone action helpers for non-component code (socket layer) to call.
@@ -265,3 +274,5 @@ export const endAiStream = useRoom.getState().endAiStream.bind(useRoom);
 export const setClosed = useRoom.getState().setClosed.bind(useRoom);
 export const setSystemPrompt = useRoom.getState().setSystemPrompt.bind(useRoom);
 export const setError = useRoom.getState().setError.bind(useRoom);
+export const addPendingRequest = useRoom.getState().addPendingRequest.bind(useRoom);
+export const removePendingRequest = useRoom.getState().removePendingRequest.bind(useRoom);

@@ -16,6 +16,7 @@ import {
   setClosed,
   setSystemPrompt,
   setError,
+  addPendingRequest,
 } from "./store";
 
 let socket: Socket | null = null;
@@ -24,7 +25,8 @@ export function connectToRoom(
   url: string,
   code: string,
   token: string,
-  onClosed?: () => void
+  onClosed?: () => void,
+  onBanned?: () => void
 ): void {
   socket = io(url, {
     path: "/socket.io",
@@ -67,6 +69,12 @@ export function connectToRoom(
   });
 
   socket.on("error", (d) => setError(d.detail ?? d.message ?? "something's wrong"));
+
+  socket.on("join_request", (d) => addPendingRequest({ requestId: d.request_id, name: d.name }));
+  socket.on("banned", () => {
+    disconnect();
+    onBanned?.();
+  });
 }
 
 export function sendMessage(text: string, replyToId?: string | null): void {

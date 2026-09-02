@@ -3,8 +3,9 @@ import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Meetpoint — Chat Rooms",
-  description: "Create a chat room, share the code, and talk with an AI participant that follows your rules.",
+  title: "Meetpoint — Collaborative AI Chat Rooms",
+  description:
+    "Open a shared chat room with a code. Friends join with a name, ideas stay in one thread, and an AI participant thinks alongside you.",
 };
 
 // Sets data-theme on <html> before paint, from the saved preference — avoids

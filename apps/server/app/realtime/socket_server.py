@@ -12,7 +12,7 @@ import socketio
 from sqlalchemy import select
 
 from app.api.auth.socket_auth import account_from_token
-from app.db.models import ChatMessage, Room, RoomMember
+from app.db.models import ChatMessage, Room, RoomBan, RoomMember
 from app.db.session import session_factory
 from app.realtime import ai_room, chat_history, events, presence, room_lifecycle
 from app.realtime.manager import ConnectionInfo, get_manager
@@ -48,6 +48,15 @@ async def connect(sid, environ, auth):
             # closing just means "empty/ended", not "gone forever".
             room.status = "waiting"
 
+        ban = await session.scalar(
+            select(RoomBan).where(
+                RoomBan.room_id == room.id,
+                (RoomBan.user_id == account.id) | (RoomBan.name_lower == (account.display_name or "").lower()),
+            )
+        )
+        if ban is not None:
+            raise socketio.exceptions.ConnectionRefusedError("banned from this room")
+
         member = await session.scalar(
             select(RoomMember).where(RoomMember.room_id == room.id, RoomMember.user_id == account.id)
         )
@@ -61,14 +70,14 @@ async def connect(sid, environ, auth):
         member.is_online = True
         await session.commit()
 
-        room_id, display_name, min_players = room.id, member.display_name, room.min_players
+        room_id, display_name = room.id, member.display_name
 
     room_lifecycle.cancel_pending_close(room_id)
     # A reconnect inside the grace window (refresh, brief network drop) was
     # never announced as "left" -- don't announce it as "joined" either.
     was_reconnect = presence.cancel_pending_offline(room_id, account.id)
     get_manager().register(
-        ConnectionInfo(sid=sid, room_id=room_id, user_id=account.id, name=display_name, min_players=min_players)
+        ConnectionInfo(sid=sid, room_id=room_id, user_id=account.id, name=display_name)
     )
     await sio.enter_room(sid, room_channel(room_id))
 
@@ -123,14 +132,6 @@ async def chat_message(sid, data):
         return
     text = (data.get("text") or "").strip()
     if not text:
-        return
-
-    if get_manager().online_count(conn.room_id) < conn.min_players:
-        await sio.emit(
-            events.ERROR,
-            {"detail": f"Need at least {conn.min_players} people in the room to chat."},
-            to=sid,
-        )
         return
 
     if ai_room.is_streaming(conn.room_id):
@@ -204,16 +205,13 @@ async def end_room(sid, data):
 
 
 async def _maybe_activate(room_id) -> None:
-    """Flip a waiting room to active once it has >=min_players members."""
+    """Flip a waiting room to active as soon as anyone is in it."""
     async with session_factory() as session:
         room = await session.get(Room, room_id)
         if room is None or room.status != "waiting":
             return
-        result = await session.execute(select(RoomMember).where(RoomMember.room_id == room_id))
-        count = len(result.scalars().all())
-        if count >= room.min_players:
-            room.status = "active"
-            await session.commit()
+        room.status = "active"
+        await session.commit()
 
 
 async def _emit_room_joined(sid, room_id, code) -> None:
@@ -231,7 +229,6 @@ async def _emit_room_joined(sid, room_id, code) -> None:
             "code": code,
             "name": room.name,
             "status": room.status,
-            "min_players": room.min_players,
             "max_players": room.max_players,
             "system_prompt": room.system_prompt,
             "host_user_id": str(room.host_user_id),

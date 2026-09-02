@@ -43,6 +43,9 @@ class User(SQLAlchemyBaseUserTableUUID, Base, TimestampMixin):
     __tablename__ = "users"
 
     display_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Synthetic account minted for a name+code guest approved into a room.
+    # No password login; only ever reached via the room-join-request flow.
+    is_guest: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     characters: Mapped[list["Character"]] = relationship(back_populates="user")
     memberships: Mapped[list["WorldMember"]] = relationship(back_populates="user")
@@ -183,7 +186,10 @@ class Room(Base, TimestampMixin):
     code: Mapped[str] = mapped_column(String(12), unique=True, index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     host_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
-    min_players: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    # Legacy: rooms used to stay un-chattable until this many people were
+    # online. Nothing reads it any more -- a room is live as soon as someone
+    # is in it. Kept only so existing rows need no migration; safe to drop.
+    min_players: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     max_players: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     # waiting | active | closed
     status: Mapped[str] = mapped_column(String(16), default="waiting", nullable=False)
@@ -206,6 +212,35 @@ class RoomMember(Base, TimestampMixin):
 
     room: Mapped[Room] = relationship(back_populates="members")
     user: Mapped[User] = relationship(back_populates="room_memberships")
+
+
+class RoomJoinRequest(Base, TimestampMixin):
+    """A name+code guest asking to enter a room. The host approves/denies;
+    approval mints a throwaway guest User and stamps its id here so the
+    guest's poll can pick up a login token (see api/routes/room_access.py)."""
+
+    __tablename__ = "room_join_requests"
+    __table_args__ = (Index("ix_join_request_room_status", "room_id", "status"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=_uuid)
+    room_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("rooms.id"), index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    # pending | approved | denied
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+class RoomBan(Base, TimestampMixin):
+    """A name and/or account barred from a room by its host. Checked both
+    when a guest requests to join and on every socket connect."""
+
+    __tablename__ = "room_bans"
+    __table_args__ = (Index("ix_room_ban_room_name", "room_id", "name_lower", unique=True),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=_uuid)
+    room_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("rooms.id"), index=True, nullable=False)
+    name_lower: Mapped[str] = mapped_column(String(128), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
 class ChatMessage(Base, TimestampMixin):

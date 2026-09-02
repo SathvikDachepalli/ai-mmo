@@ -12,14 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionInfo:
-    __slots__ = ("sid", "room_id", "user_id", "name", "min_players")
+    __slots__ = ("sid", "room_id", "user_id", "name")
 
-    def __init__(self, sid: str, room_id: UUID, user_id: UUID, name: str, min_players: int = 1):
+    def __init__(self, sid: str, room_id: UUID, user_id: UUID, name: str):
         self.sid = sid
         self.room_id = room_id
         self.user_id = user_id
         self.name = name
-        self.min_players = min_players
 
 
 class ConnectionManager:

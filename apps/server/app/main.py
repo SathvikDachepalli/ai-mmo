@@ -44,10 +44,12 @@ build_auth_routes(app)
 
 from app.api.routes.ai_models import router as ai_models_router  # noqa: E402
 from app.api.routes.rooms import router as rooms_router  # noqa: E402
+from app.api.routes.room_access import router as room_access_router  # noqa: E402
 from app.api.routes.admin import router as admin_router  # noqa: E402
 
 app.include_router(ai_models_router)
 app.include_router(rooms_router)
+app.include_router(room_access_router)
 app.include_router(admin_router)
 
 # Root sanity endpoint.

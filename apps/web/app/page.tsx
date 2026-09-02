@@ -5,28 +5,22 @@ import { AnimatePresence, animate, motion, useMotionValue, useTransform, type Pa
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
+  Ban,
   Check,
   Copy,
   DoorOpen,
   Hash,
-  KeyRound,
   Loader2,
-  LogIn,
   LogOut,
-  Mail,
-  Monitor,
   MoreVertical,
-  Moon,
   Plus,
   Reply,
   Send,
   Shield,
   ShieldAlert,
   Sparkles,
-  Sun,
   Trash2,
-  Type,
-  User,
+  UserCheck,
   UserPlus,
   Users,
   Wifi,
@@ -34,15 +28,8 @@ import {
   X,
 } from "lucide-react";
 
-import {
-  register as authRegister,
-  login as authLogin,
-  me as authMe,
-  getToken,
-  saveName,
-  logout,
-  type AuthUser,
-} from "./lib/auth";
+import { me as authMe, getToken, logout, type AuthUser } from "./lib/auth";
+import { listPending, approveRequest, denyRequest, banMember } from "./lib/access";
 import {
   createRoom,
   joinRoom,
@@ -54,235 +41,23 @@ import {
   type MyRoom,
 } from "./lib/rooms";
 import { listAllRooms, deleteRoom, type AdminRoom } from "./lib/admin";
+import { ModelPicker } from "./components/admin/model-picker";
 import { connectToRoom, disconnect, sendMessage, sendTyping, endRoom } from "./lib/rt";
 import { useRoom, type ChatEntry, type Emotion } from "./lib/store";
-import { cycleTheme, getStoredTheme, type Theme } from "./lib/theme";
-import { getStoredChatFont, toggleChatFont, type ChatFont } from "./lib/font";
+import { Landing } from "./components/landing/landing";
+import { Avatar } from "./components/ui/avatar";
+import { Field } from "./components/ui/field";
 import { RetroWindow } from "./components/ui/retro-window";
 import { PixelButton } from "./components/ui/pixel-button";
+import { ChatFontToggle, ThemeToggle } from "./components/ui/settings-toggles";
 import { StatusIndicator } from "./components/ui/status-indicator";
 import { PixelBubble } from "./components/ui/pixel-bubble";
 import { AiFace } from "./components/ui/ai-face";
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://localhost:8000";
 
-type Mode = "login" | "register";
 type View = "lobby" | "room" | "admin";
 
-/* ---------------------------------- Auth ---------------------------------- */
-
-function AuthScreen({ onAuthed }: { onAuthed: () => void }) {
-  const [mode, setMode] = useState<Mode>("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setBusy(true);
-    try {
-      if (mode === "register") {
-        await authRegister(email.trim(), password, displayName.trim());
-      }
-      await authLogin(email.trim(), password);
-      saveName(displayName.trim() || email.split("@")[0]);
-      onAuthed();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="relative min-h-dvh bg-[var(--color-background)] text-[var(--color-foreground)] flex flex-col items-center justify-center gap-8 px-6 overflow-hidden">
-      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2">
-        <ThemeToggle />
-        <ChatFontToggle />
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: "easeOut" }}
-        className="relative flex flex-col items-center gap-2 text-center"
-      >
-        <span className="text-xs tracking-[0.3em] text-[var(--color-primary)] uppercase font-mono">
-          Chat Rooms
-        </span>
-        <h1 className="font-display text-4xl sm:text-5xl font-bold tracking-wide text-[var(--color-foreground)]">
-          MEETPOINT.EXE
-        </h1>
-        <p className="max-w-sm text-[var(--color-muted)] text-sm leading-relaxed">
-          Create a room, share the code, and chat once someone else joins.
-        </p>
-      </motion.div>
-
-      <motion.form
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
-        onSubmit={submit}
-        className="relative w-full max-w-sm"
-      >
-      <RetroWindow title="LOGIN.EXE" bodyClassName="p-6 flex flex-col gap-3">
-        {mode === "register" ? (
-          <Field icon={<User size={16} />} label="Display name">
-            <input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="How others will see you"
-              className="input-field"
-              autoFocus
-              autoComplete="name"
-            />
-          </Field>
-        ) : null}
-        <Field icon={<Mail size={16} />} label="Email">
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            type="email"
-            placeholder="you@example.com"
-            className="input-field"
-            autoComplete="email"
-            required
-          />
-        </Field>
-        <Field icon={<KeyRound size={16} />} label="Password">
-          <input
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            placeholder="••••••••"
-            className="input-field"
-            autoComplete="current-password"
-            required
-            minLength={6}
-          />
-        </Field>
-
-        {error ? (
-          <p role="alert" className="text-[var(--color-accent)] text-sm">
-            {error}
-          </p>
-        ) : null}
-
-        <PixelButton type="submit" disabled={busy} className="mt-1">
-          {busy ? (
-            <Loader2 size={16} className="animate-spin" />
-          ) : mode === "login" ? (
-            <LogIn size={16} />
-          ) : (
-            <UserPlus size={16} />
-          )}
-          {busy ? "Working…" : mode === "login" ? "Sign in" : "Create account"}
-        </PixelButton>
-        <button
-          type="button"
-          onClick={() => {
-            setMode(mode === "login" ? "register" : "login");
-            setError("");
-          }}
-          className="text-[var(--color-ring)] text-sm underline decoration-dotted underline-offset-4 hover:opacity-80 transition-opacity duration-150 cursor-pointer"
-        >
-          {mode === "login" ? "No account? Create one" : "Have an account? Sign in"}
-        </button>
-      </RetroWindow>
-      </motion.form>
-    </div>
-  );
-}
-
-function Field({
-  icon,
-  label,
-  children,
-  className = "",
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <label className={`flex flex-col gap-1 ${className}`}>
-      <span className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] font-medium">
-        {icon}
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-/* -------------------------------- Theme toggle -------------------------------- */
-
-const THEME_ICONS: Record<Theme, React.ComponentType<{ size?: number }>> = {
-  light: Sun,
-  dark: Moon,
-  system: Monitor,
-};
-
-const THEME_LABELS: Record<Theme, string> = {
-  light: "Light",
-  dark: "Dark",
-  system: "System",
-};
-
-function ThemeToggle({ className = "" }: { className?: string }) {
-  const [theme, setTheme] = useState<Theme>("system");
-
-  useEffect(() => {
-    setTheme(getStoredTheme());
-  }, []);
-
-  const Icon = THEME_ICONS[theme];
-
-  return (
-    <button
-      onClick={() => setTheme(cycleTheme(theme))}
-      title={`Theme: ${THEME_LABELS[theme]} (click to change)`}
-      aria-label="Change theme"
-      className={`flex items-center gap-1.5 text-xs font-mono px-2.5 py-1.5 rounded-[3px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-foreground)] hover:border-[var(--color-border-strong)] transition-colors duration-150 cursor-pointer ${className}`}
-    >
-      <Icon size={14} />
-      <span className="hidden sm:inline">{THEME_LABELS[theme]}</span>
-    </button>
-  );
-}
-
-const CHAT_FONT_LABELS: Record<ChatFont, string> = {
-  poppins: "Poppins",
-  pixelify: "Pixelify",
-};
-
-/** Settings control: switches the font used for chat bubbles / AI narration
- * between Poppins (default, easier long-read body copy) and Pixelify Sans
- * (matches the window chrome, which never changes). Window titles, labels,
- * and buttons always stay Pixelify regardless of this setting. */
-function ChatFontToggle({ className = "" }: { className?: string }) {
-  const [font, setFont] = useState<ChatFont>("poppins");
-
-  useEffect(() => {
-    setFont(getStoredChatFont());
-  }, []);
-
-  return (
-    <button
-      onClick={() => setFont(toggleChatFont(font))}
-      title={`Chat font: ${CHAT_FONT_LABELS[font]} (click to change)`}
-      aria-label="Change chat font"
-      className={`flex items-center gap-1.5 text-xs font-mono px-2.5 py-1.5 rounded-[3px] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-foreground)] hover:border-[var(--color-border-strong)] transition-colors duration-150 cursor-pointer ${className}`}
-    >
-      <Type size={14} />
-      <span className="hidden sm:inline">{CHAT_FONT_LABELS[font]}</span>
-    </button>
-  );
-}
 
 /* -------------------------------- Root gate -------------------------------- */
 
@@ -318,10 +93,17 @@ export default function Home() {
 
   if (!authed) {
     return (
-      <AuthScreen
-        onAuthed={() => {
+      <Landing
+        onHostAuthed={() => {
           const token = getToken();
           if (token) authMe(token).then(setUser);
+          setAuthed(true);
+        }}
+        onGuestReady={(code) => {
+          const token = getToken();
+          if (token) authMe(token).then(setUser);
+          setRoomCode(code);
+          setView("room");
           setAuthed(true);
         }}
       />
@@ -377,7 +159,6 @@ function Lobby({
 }) {
   const [tab, setTab] = useState<"create" | "join">("create");
   const [roomName, setRoomName] = useState("");
-  const [minPlayers, setMinPlayers] = useState(1);
   const [maxPlayers, setMaxPlayers] = useState(10);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -392,7 +173,6 @@ function Lobby({
       const token = getToken();
       if (!token) throw new Error("Session expired, sign in again");
       const room = await createRoom(token, roomName.trim() || "Untitled Room", {
-        minPlayers,
         maxPlayers,
         systemPrompt,
       });
@@ -455,34 +235,16 @@ function Lobby({
                 autoFocus
               />
             </Field>
-            <div className="flex gap-3">
-              <Field icon={<Users size={16} />} label="Min players" className="flex-1 min-w-0">
-                <input
-                  type="number"
-                  min={1}
-                  max={maxPlayers}
-                  value={minPlayers}
-                  onChange={(e) => {
-                    const v = Math.max(1, Math.min(Number(e.target.value) || 1, maxPlayers));
-                    setMinPlayers(v);
-                  }}
-                  className="input-field w-full"
-                />
-              </Field>
-              <Field icon={<Users size={16} />} label="Max players" className="flex-1 min-w-0">
-                <input
-                  type="number"
-                  min={minPlayers}
-                  max={10}
-                  value={maxPlayers}
-                  onChange={(e) => {
-                    const v = Math.max(minPlayers, Math.min(Number(e.target.value) || 10, 10));
-                    setMaxPlayers(v);
-                  }}
-                  className="input-field w-full"
-                />
-              </Field>
-            </div>
+            <Field icon={<Users size={16} />} label="Max players">
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={maxPlayers}
+                onChange={(e) => setMaxPlayers(Math.max(1, Math.min(Number(e.target.value) || 10, 10)))}
+                className="input-field w-full"
+              />
+            </Field>
             <Field icon={<Sparkles size={16} />} label="AI rules (optional)">
               <textarea
                 value={systemPrompt}
@@ -579,25 +341,31 @@ const PAGE_SIZE = 10;
 
 function MyRoomsPanel({ onOpen }: { onOpen: (code: string) => void }) {
   const [rooms, setRooms] = useState<MyRoom[]>([]);
-  const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
 
+  // Refs for the same reason as the admin list: read inside an async callback,
+  // never rendered. As state, a doubled call re-fetched page zero.
+  const inFlight = useRef(false);
+  const offsetRef = useRef(0);
+
   const loadMore = async () => {
     const token = getToken();
-    if (!token || loading || !hasMore) return;
+    if (!token || inFlight.current || !hasMore) return;
+    inFlight.current = true;
     setLoading(true);
     try {
-      const page = await getMyRooms(token, PAGE_SIZE, offset);
+      const page = await getMyRooms(token, PAGE_SIZE, offsetRef.current);
+      offsetRef.current += page.length;
       setRooms((prev) => {
         const seen = new Set(prev.map((r) => r.code));
         return [...prev, ...page.filter((r) => !seen.has(r.code))];
       });
-      setOffset(offset + page.length);
       setHasMore(page.length === PAGE_SIZE);
     } finally {
+      inFlight.current = false;
       setLoading(false);
       setLoaded(true);
     }
@@ -759,24 +527,39 @@ function RoomStatusPill({ status }: { status: string }) {
 
 function AdminPanel({ onBack }: { onBack: () => void }) {
   const [rooms, setRooms] = useState<AdminRoom[]>([]);
-  const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Both of these are refs rather than state because neither is rendered, and
+  // both are read inside an async callback. As state they were stale closures:
+  // two calls in the same tick (Strict Mode double-invoking the mount effect,
+  // or the scroll sentinel firing twice) each saw `loading === false` and
+  // `offset === 0`, fetched page zero twice, and appended it twice — which is
+  // what produced the duplicate React keys.
+  const inFlight = useRef(false);
+  const offsetRef = useRef(0);
+
   const loadMore = async () => {
     const token = getToken();
-    if (!token || loading || !hasMore) return;
+    if (!token || inFlight.current || !hasMore) return;
+    inFlight.current = true;
     setLoading(true);
     setError("");
     try {
-      const page = await listAllRooms(token, PAGE_SIZE, offset);
-      setRooms((prev) => [...prev, ...page]);
-      setOffset(offset + page.length);
+      const page = await listAllRooms(token, PAGE_SIZE, offsetRef.current);
+      offsetRef.current += page.length;
+      // Belt and braces: even if a duplicate ever reaches here, it cannot
+      // become a duplicate key.
+      setRooms((prev) => {
+        const seen = new Set(prev.map((r) => r.id));
+        return [...prev, ...page.filter((r) => !seen.has(r.id))];
+      });
       setHasMore(page.length === PAGE_SIZE);
     } catch (err) {
       setError((err as Error).message);
     } finally {
+      inFlight.current = false;
       setLoading(false);
     }
   };
@@ -817,6 +600,9 @@ function AdminPanel({ onBack }: { onBack: () => void }) {
           bodyClassName="p-4 flex flex-col gap-2"
         >
         {error ? <p className="text-[var(--color-accent)] text-sm">{error}</p> : null}
+
+        <ModelPicker />
+
         <div className="overflow-x-auto rounded-[3px] border border-[var(--color-border)]">
           <table className="w-full text-sm">
             <thead className="bg-[var(--color-surface)] text-[var(--color-muted)] text-xs uppercase tracking-wider">
@@ -1050,6 +836,84 @@ function InvitePanel({ code, onClose }: { code: string; onClose: () => void }) {
   );
 }
 
+/** Floating card: pending name+code join requests for the host to allow or
+ * block. Requests arrive live over the socket ("join_request") and are
+ * seeded once from REST on mount (see ChatRoomScreen). */
+function JoinRequestsPanel({
+  code,
+  requests,
+  onResolved,
+}: {
+  code: string;
+  requests: { requestId: string; name: string }[];
+  onResolved: (requestId: string) => void;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const act = async (requestId: string, kind: "approve" | "deny") => {
+    const token = getToken();
+    if (!token) return;
+    setBusyId(requestId);
+    try {
+      if (kind === "approve") await approveRequest(token, code, requestId);
+      else await denyRequest(token, code, requestId);
+      onResolved(requestId);
+    } catch {
+      /* best-effort — request stays listed so the host can retry */
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -8, scale: 0.98 }}
+      transition={{ duration: 0.2 }}
+      className="fixed top-4 right-4 z-50 w-72 max-w-[90vw] rounded-[3px] border border-[var(--color-arcane)]/40 bg-[var(--color-surface)] shadow-2xl shadow-black/40 overflow-hidden"
+    >
+      <div className="px-3 py-2 border-b border-[var(--color-border)] flex items-center gap-1.5 text-xs uppercase tracking-widest text-[var(--color-arcane)] font-mono">
+        <UserPlus size={12} />
+        Join requests ({requests.length})
+      </div>
+      <ul className="flex flex-col divide-y divide-[var(--color-border)]">
+        <AnimatePresence initial={false}>
+          {requests.map((r) => (
+            <motion.li
+              key={r.requestId}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.15 }}
+              className="px-3 py-2 flex items-center gap-2 overflow-hidden"
+            >
+              <Avatar name={r.name} size={22} />
+              <span className="flex-1 truncate text-sm">{r.name}</span>
+              <button
+                onClick={() => act(r.requestId, "approve")}
+                disabled={busyId === r.requestId}
+                title="Allow"
+                className="text-[var(--color-primary)] hover:opacity-80 transition-opacity duration-150 cursor-pointer disabled:opacity-40"
+              >
+                <UserCheck size={16} />
+              </button>
+              <button
+                onClick={() => act(r.requestId, "deny")}
+                disabled={busyId === r.requestId}
+                title="Block"
+                className="text-[var(--color-accent)] hover:opacity-80 transition-opacity duration-150 cursor-pointer disabled:opacity-40"
+              >
+                <Ban size={16} />
+              </button>
+            </motion.li>
+          ))}
+        </AnimatePresence>
+      </ul>
+    </motion.div>
+  );
+}
+
 /* -------------------------------- Chat room -------------------------------- */
 
 function ChatRoomScreen({ code, onLeave }: { code: string; onLeave: () => void }) {
@@ -1067,7 +931,10 @@ function ChatRoomScreen({ code, onLeave }: { code: string; onLeave: () => void }
     const token = getToken();
     if (token) {
       authMe(token).then((u) => useRoom.getState().setUserId(u.id));
-      connectToRoom(SOCKET_URL, code, token);
+      connectToRoom(SOCKET_URL, code, token, undefined, () => {
+        window.alert("You were banned from this room.");
+        onLeave();
+      });
     }
     return () => disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1127,7 +994,7 @@ function ChatRoomScreen({ code, onLeave }: { code: string; onLeave: () => void }
   }, [code]);
 
   const onlineCount = room.members.filter((m) => m.isOnline).length;
-  const canChat = room.joined && onlineCount >= room.minPlayers && !room.closed;
+  const canChat = room.joined && !room.closed;
   const sendLocked = room.aiStreaming;
   const isHost = room.userId !== "" && room.userId === room.hostUserId;
 
@@ -1153,6 +1020,28 @@ function ChatRoomScreen({ code, onLeave }: { code: string; onLeave: () => void }
   const handleEndRoom = () => {
     if (window.confirm("End this room for everyone? This closes it permanently.")) {
       endRoom();
+    }
+  };
+
+  useEffect(() => {
+    if (!isHost || !room.joined) return;
+    const token = getToken();
+    if (!token) return;
+    listPending(token, code)
+      .then((reqs) => {
+        reqs.forEach((r) => useRoom.getState().addPendingRequest({ requestId: r.request_id, name: r.name }));
+      })
+      .catch(() => {});
+  }, [isHost, room.joined, code]);
+
+  const handleBan = async (userId: string, name: string) => {
+    if (!window.confirm(`Ban ${name} from this room? They won't be able to rejoin.`)) return;
+    const token = getToken();
+    if (!token) return;
+    try {
+      await banMember(token, code, userId);
+    } catch (err) {
+      useRoom.getState().setError((err as Error).message);
     }
   };
 
@@ -1295,11 +1184,6 @@ function ChatRoomScreen({ code, onLeave }: { code: string; onLeave: () => void }
             <Loader2 size={14} className="animate-spin" />
             Loading room…
           </div>
-        ) : !canChat ? (
-          <div className="bg-[var(--color-primary)]/10 text-[var(--color-primary)] px-4 py-2 text-sm border-b border-[var(--color-primary)]/25 flex items-center gap-2">
-            <Loader2 size={14} className="animate-spin" />
-            Waiting for at least {room.minPlayers} people to join before you can chat…
-          </div>
         ) : null}
 
         <div ref={scrollRef} className="ember-scroll flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-3">
@@ -1356,10 +1240,25 @@ function ChatRoomScreen({ code, onLeave }: { code: string; onLeave: () => void }
         />
       </div>
 
-      <PresenceSidebar members={room.members} youId={room.userId} />
+      <PresenceSidebar members={room.members} youId={room.userId} isHost={isHost} onBan={handleBan} />
       <AnimatePresence>
         {showMembers ? (
-          <MembersDrawer members={room.members} youId={room.userId} onClose={() => setShowMembers(false)} />
+          <MembersDrawer
+            members={room.members}
+            youId={room.userId}
+            isHost={isHost}
+            onBan={handleBan}
+            onClose={() => setShowMembers(false)}
+          />
+        ) : null}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isHost && room.pendingRequests.length > 0 ? (
+          <JoinRequestsPanel
+            code={code}
+            requests={room.pendingRequests}
+            onResolved={(requestId) => useRoom.getState().removePendingRequest(requestId)}
+          />
         ) : null}
       </AnimatePresence>
     </div>
@@ -1383,11 +1282,21 @@ function ConnectionBadge({ connected }: { connected: boolean }) {
 
 type MemberBrief = { userId: string; displayName: string; isOnline: boolean; isHost: boolean };
 
-function MemberList({ members, youId }: { members: MemberBrief[]; youId: string }) {
+function MemberList({
+  members,
+  youId,
+  isHost = false,
+  onBan,
+}: {
+  members: MemberBrief[];
+  youId: string;
+  isHost?: boolean;
+  onBan?: (userId: string, name: string) => void;
+}) {
   return (
     <ul className="flex flex-col gap-2">
       {members.map((m) => (
-        <li key={m.userId} className="flex items-center gap-2 text-sm">
+        <li key={m.userId} className="flex items-center gap-2 text-sm group">
           <span className="relative">
             <Avatar name={m.displayName} size={26} />
             <StatusIndicator
@@ -1396,11 +1305,20 @@ function MemberList({ members, youId }: { members: MemberBrief[]; youId: string 
               className="absolute -bottom-0.5 -right-0.5 border-2 border-[var(--color-surface)]"
             />
           </span>
-          <span className="truncate">
+          <span className="truncate flex-1">
             {m.displayName}
             {m.userId === youId ? <span className="text-[var(--color-primary)] text-xs ml-1">(you)</span> : null}
             {m.isHost ? <span className="text-[var(--color-ember)] text-xs ml-1">host</span> : null}
           </span>
+          {isHost && !m.isHost && onBan ? (
+            <button
+              onClick={() => onBan(m.userId, m.displayName)}
+              title={`Ban ${m.displayName}`}
+              className="opacity-0 group-hover:opacity-100 text-[var(--color-muted)] hover:text-[var(--color-accent)] transition-opacity duration-150 cursor-pointer"
+            >
+              <Ban size={14} />
+            </button>
+          ) : null}
         </li>
       ))}
     </ul>
@@ -1408,14 +1326,24 @@ function MemberList({ members, youId }: { members: MemberBrief[]; youId: string 
 }
 
 /** Static member list — only shown on wide screens where there's room for it. */
-function PresenceSidebar({ members, youId }: { members: MemberBrief[]; youId: string }) {
+function PresenceSidebar({
+  members,
+  youId,
+  isHost,
+  onBan,
+}: {
+  members: MemberBrief[];
+  youId: string;
+  isHost?: boolean;
+  onBan?: (userId: string, name: string) => void;
+}) {
   return (
     <aside className="hidden lg:flex flex-col w-56 border-l border-[var(--color-border)] bg-[var(--color-surface)]/50 px-4 py-5 gap-4">
       <h2 className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-[var(--color-muted)] font-mono">
         <Users size={13} />
         PLAYERS.EXE ({members.length})
       </h2>
-      <MemberList members={members} youId={youId} />
+      <MemberList members={members} youId={youId} isHost={isHost} onBan={onBan} />
     </aside>
   );
 }
@@ -1425,10 +1353,14 @@ function PresenceSidebar({ members, youId }: { members: MemberBrief[]; youId: st
 function MembersDrawer({
   members,
   youId,
+  isHost,
+  onBan,
   onClose,
 }: {
   members: MemberBrief[];
   youId: string;
+  isHost?: boolean;
+  onBan?: (userId: string, name: string) => void;
   onClose: () => void;
 }) {
   return (
@@ -1460,7 +1392,7 @@ function MembersDrawer({
           </button>
         </div>
         <div className="overflow-y-auto ember-scroll">
-          <MemberList members={members} youId={youId} />
+          <MemberList members={members} youId={youId} isHost={isHost} onBan={onBan} />
         </div>
       </motion.aside>
     </>
@@ -1521,35 +1453,6 @@ function HostMenu({
 }
 
 /* -------------------------------- Message log ------------------------------- */
-
-// Muted variants of the palette's two hues (mint, accent) instead of bright
-// rainbow tags — keeps per-user distinction without breaking the "not overly
-// colorful" rule.
-const AVATAR_PALETTE = [
-  "bg-[var(--color-primary)]/20 text-[var(--color-primary)] border-[var(--color-primary)]/40",
-  "bg-[var(--color-muted)]/20 text-[var(--color-muted)] border-[var(--color-muted)]/40",
-  "bg-[var(--color-accent)]/20 text-[var(--color-accent)] border-[var(--color-accent)]/40",
-  "bg-[var(--color-foreground-subtle)]/20 text-[var(--color-foreground-subtle)] border-[var(--color-foreground-subtle)]/40",
-  "bg-[var(--color-ember)]/20 text-[var(--color-ember)] border-[var(--color-ember)]/40",
-];
-
-function hashName(name: string): number {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return h;
-}
-
-function Avatar({ name, size = 30 }: { name: string; size?: number }) {
-  const palette = AVATAR_PALETTE[hashName(name || "?") % AVATAR_PALETTE.length];
-  return (
-    <span
-      className={`flex items-center justify-center rounded-[3px] border font-display font-semibold shrink-0 ${palette}`}
-      style={{ width: size, height: size, fontSize: size * 0.42 }}
-    >
-      {(name || "?").slice(0, 1).toUpperCase()}
-    </span>
-  );
-}
 
 /** Renders AI responses (markdown: **bold**, lists, `code`, links, etc.) with
  * spacing/colors matching the chat theme instead of react-markdown's bare
@@ -1827,7 +1730,7 @@ function InputBar({
         <input
           value={draft}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={disabled ? "Waiting for more people to join…" : "Say something…"}
+          placeholder={disabled ? "Connecting to the room…" : "Say something…"}
           disabled={disabled}
           className="flex-1 rounded-[3px] bg-[var(--color-surface-raised)] border border-[var(--color-border)] px-3 py-2.5 text-sm font-mono outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)]/40 transition-shadow duration-150 placeholder:text-[var(--color-foreground-subtle)] disabled:opacity-50"
           autoFocus
